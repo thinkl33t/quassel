@@ -350,7 +350,9 @@ void Quassel::setupCliParser()
             {"config-from-environment", tr("Load configuration from environment variables.")},
             {"select-backend", tr("Switch storage backend (migrating data if possible)."), tr("backendidentifier")},
             {"select-authenticator", tr("Select authentication backend."), tr("authidentifier")},
-            {"add-user", tr("Starts an interactive session to add a new core user.")},
+            {"add-user", tr("Starts an interactive session to add a new core user. "
+                            "The username may be given with --username=<username>; otherwise it is read from stdin.")},
+            {"username", tr("Username for --add-user (non-interactive)."), tr("username")},
             {"change-userpass",
              tr("Starts an interactive session to change the password of the user identified by <username>."),
              tr("username")},
@@ -359,6 +361,9 @@ void Quassel::setupCliParser()
              tr("username")},
             {"list-users",
              tr("List all users known to the core's storage. Combine with --json for machine-readable output.")},
+            {"json", tr("Output results as a single JSON document on stdout (for machine parsing). "
+                       "Suppresses interactive prompts; credentials are read from stdin or the "
+                       "QUASSEL_USER_PASSWORD / QUASSEL_NEW_PASSWORD environment variables.")},
             {"strict-ident", tr("Use users' quasselcore username as ident reply. Ignores each user's configured ident setting.")},
             {"ident-daemon", tr("Enable internal ident daemon.")},
             {"ident-port",

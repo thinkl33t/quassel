@@ -191,6 +191,13 @@ void Core::init()
 
     // This checks separately because config-from-environment might have only configured the core just now
     if (_configured) {
+        if (Quassel::isOptionSet("json")) {
+            // Keep stdout clean for the JSON result: route log messages to stderr
+            qInstallMessageHandler([](QtMsgType, const QMessageLogContext&, const QString& msg) {
+                QTextStream(stderr) << msg << endl;
+            });
+        }
+
         if (Quassel::isOptionSet("add-user")) {
             bool success = createUser();
             throw ExitException{success ? EXIT_SUCCESS : EXIT_FAILURE};
@@ -1026,8 +1033,74 @@ bool Core::selectAuthenticator(const QString& backend)
     return true;
 }
 
+Core::JsonResult Core::jsonOk(const QString& command, const QJsonObject& result)
+{
+    return {true, command, QString(), result};
+}
+
+Core::JsonResult Core::jsonFail(const QString& command, const QString& error)
+{
+    return {false, command, error, QJsonObject{}};
+}
+
+void Core::JsonResult::print() const
+{
+    QJsonObject doc;
+    doc["ok"] = ok;
+    doc["command"] = command;
+    if (ok) {
+        doc["result"] = result;
+    }
+    else {
+        doc["error"] = error;
+    }
+    QTextStream out(stdout);
+    out << QJsonDocument(doc).toJson(QJsonDocument::Compact) << endl;
+}
+
+// Read a single line from stdin without prompting. Used by the --json mode so
+// that credentials can be piped in (e.g. `echo -e "user\npass" | quasselcore --add-user --json`).
+static QString readStdinLine()
+{
+    QTextStream in(stdin);
+    return in.readLine();
+}
+
 bool Core::createUser()
 {
+    if (Quassel::isOptionSet("json")) {
+        QString username = Quassel::optionValue("username");
+        if (username.isEmpty()) {
+            username = readStdinLine().trimmed();
+        }
+        QString password = qEnvironmentVariable("QUASSEL_USER_PASSWORD");
+        if (password.isEmpty()) {
+            disableStdInEcho();
+            password = readStdinLine();
+            enableStdInEcho();
+        }
+
+        if (username.isEmpty()) {
+            jsonFail("add-user", "Username is empty. Set --username or provide it as the first stdin line.").print();
+            return false;
+        }
+        if (password.isEmpty()) {
+            jsonFail("add-user", "Password is empty. Set QUASSEL_USER_PASSWORD or provide it as a stdin line.").print();
+            return false;
+        }
+        if (_storage->getUserId(username).isValid()) {
+            jsonFail("add-user", "User already exists: " + username).print();
+            return false;
+        }
+
+        if (_storage->addUser(username, password).isValid()) {
+            jsonOk("add-user", QJsonObject{{"username", username}}).print();
+            return true;
+        }
+        jsonFail("add-user", "Unable to add user: " + username).print();
+        return false;
+    }
+
     QTextStream out(stdout);
     QTextStream in(stdin);
     out << "Add a new user:" << endl;
@@ -1067,6 +1140,36 @@ bool Core::createUser()
 
 bool Core::changeUserPass(const QString& username)
 {
+    if (Quassel::isOptionSet("json")) {
+        UserId userId = _storage->getUserId(username);
+        if (!userId.isValid()) {
+            jsonFail("change-userpass", "User does not exist: " + username).print();
+            return false;
+        }
+        if (!canChangeUserPassword(userId)) {
+            jsonFail("change-userpass", "User is configured through an auth provider that has forbidden manual password changing: " + username).print();
+            return false;
+        }
+
+        QString password = qEnvironmentVariable("QUASSEL_NEW_PASSWORD");
+        if (password.isEmpty()) {
+            disableStdInEcho();
+            password = readStdinLine();
+            enableStdInEcho();
+        }
+        if (password.isEmpty()) {
+            jsonFail("change-userpass", "Password is empty (set QUASSEL_NEW_PASSWORD or pipe it as a stdin line).").print();
+            return false;
+        }
+
+        if (_storage->updateUser(userId, password)) {
+            jsonOk("change-userpass", QJsonObject{{"username", username}}).print();
+            return true;
+        }
+        jsonFail("change-userpass", "Failed to change password: " + username).print();
+        return false;
+    }
+
     QTextStream out(stdout);
     QTextStream in(stdin);
     UserId userId = _storage->getUserId(username);
@@ -1114,6 +1217,39 @@ bool Core::changeUserPass(const QString& username)
 
 bool Core::deleteUser(const QString& username)
 {
+    if (Quassel::isOptionSet("json")) {
+        UserId userId = _storage->getUserId(username);
+        if (!userId.isValid()) {
+            jsonFail("delete-user", "User does not exist: " + username).print();
+            return false;
+        }
+
+        const bool hadActiveSession = _sessions.contains(userId);
+
+        // Make sure pending data of the user's active session gets saved to the
+        // database before it is shut down
+        syncStorage();
+
+        // Shut down the user's session, if any, so that any live IRC connections
+        // are disconnected and connected clients are dropped
+        if (hadActiveSession) {
+            qInfo() << "Shutting down active session of user" << username;
+            _sessions.take(userId)->deleteLater();
+        }
+
+        // Remove the user and all of their data from the database
+        _storage->delUser(userId);
+
+        // Make sure the user is not restored as an active session on next core start
+        saveState();
+
+        // Refresh the sysident cache
+        cacheSysIdent();
+
+        jsonOk("delete-user", QJsonObject{{"username", username}, {"hadActiveSession", hadActiveSession}}).print();
+        return true;
+    }
+
     QTextStream out(stdout);
     QTextStream in(stdin);
 
@@ -1163,6 +1299,16 @@ bool Core::deleteUser(const QString& username)
 
 bool Core::listUsers()
 {
+    if (Quassel::isOptionSet("json")) {
+        const QMap<UserId, QString> users = _storage->userList();
+        QJsonObject userObj;
+        for (auto it = users.constBegin(); it != users.constEnd(); ++it) {
+            userObj.insert(QString::number(it.key().toInt()), it.value());
+        }
+        jsonOk("list-users", QJsonObject{{"users", userObj}}).print();
+        return true;
+    }
+
     QTextStream out(stdout);
 
     const QMap<UserId, QString> users = _storage->userList();

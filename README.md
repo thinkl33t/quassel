@@ -39,6 +39,26 @@ Once you've set up Quassel, you may:
 * List all users: `quasselcore --list-users`
 * See all available options: `quasselcore --help`
 
+For scripting, add `--json` to get a single machine-readable JSON document on
+stdout (interactive prompts are suppressed; passwords are read from the
+`QUASSEL_USER_PASSWORD` / `QUASSEL_NEW_PASSWORD` environment variables or,
+when those are not set, silently from stdin):
+
+```bash
+$ quasselcore --list-users --json
+{"ok":true,"command":"list-users","result":{"users":{"1":"admin","2":"alice"}}}
+
+$ quasselcore --add-user --username=bob --json
+{"ok":true,"command":"add-user","result":{"username":"bob"}}
+
+# ...or pipe the username and password via stdin instead:
+$ printf 'bob\nsecret\n' | quasselcore --add-user --json
+{"ok":true,"command":"add-user","result":{"username":"bob"}}
+
+$ quasselcore --delete-user=bob --json
+{"ok":true,"command":"delete-user","result":{"username":"bob","hadActiveSession":true}}
+```
+
 On some systems, you may need to specify `--configdir`, e.g.
 `quasselcore --configdir=/var/lib/quassel [command]`.
 

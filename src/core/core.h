@@ -26,6 +26,8 @@
 #include <vector>
 
 #include <QDateTime>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPointer>
 #include <QSslSocket>
 #include <QString>
@@ -760,6 +762,19 @@ private slots:
     void onSessionShutdown(SessionThread* session);
 
 private:
+    // Machine-readable output for the --json flag. Emits a single JSON document on stdout.
+    struct JsonResult
+    {
+        bool ok;
+        QString command;
+        QString error;
+        QJsonObject result;
+
+        void print() const;
+    };
+    static JsonResult jsonOk(const QString& command, const QJsonObject& result);
+    static JsonResult jsonFail(const QString& command, const QString& error);
+
     SessionThread* sessionForUser(UserId userId, bool restoreState = false);
     void addClientHelper(RemotePeer* peer, UserId uid);
     // void processCoreSetup(QTcpSocket *socket, QVariantMap &msg);
