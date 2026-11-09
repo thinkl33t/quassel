@@ -139,6 +139,12 @@ public:
         return instance()->_storage->getUserId(userName);
     }
 
+    //! Get a list of all known user IDs and their login names
+    /**
+     * \return A map of UserId to username
+     */
+    static inline QMap<UserId, QString> userList() { return instance()->_storage->userList(); }
+
     //! Change a user's password
     /**
      * \param userId     The user's ID
@@ -748,6 +754,8 @@ private slots:
     void setupClientSession(RemotePeer*, UserId);
 
     bool changeUserPass(const QString& username);
+    bool deleteUser(const QString& username);
+    bool listUsers();
 
     void onSessionShutdown(SessionThread* session);
 

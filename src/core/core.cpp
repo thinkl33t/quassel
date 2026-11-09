@@ -31,6 +31,7 @@
 #include "network.h"
 #include "postgresqlstorage.h"
 #include "quassel.h"
+#include "sessionthread.h"
 #include "sqlauthenticator.h"
 #include "sqlitestorage.h"
 #include "types.h"
@@ -197,6 +198,16 @@ void Core::init()
 
         if (Quassel::isOptionSet("change-userpass")) {
             bool success = changeUserPass(Quassel::optionValue("change-userpass"));
+            throw ExitException{success ? EXIT_SUCCESS : EXIT_FAILURE};
+        }
+
+        if (Quassel::isOptionSet("delete-user")) {
+            bool success = deleteUser(Quassel::optionValue("delete-user"));
+            throw ExitException{success ? EXIT_SUCCESS : EXIT_FAILURE};
+        }
+
+        if (Quassel::isOptionSet("list-users")) {
+            bool success = listUsers();
             throw ExitException{success ? EXIT_SUCCESS : EXIT_FAILURE};
         }
 
@@ -1099,6 +1110,71 @@ bool Core::changeUserPass(const QString& username)
         qWarning() << "Failed to change password!";
         return false;
     }
+}
+
+bool Core::deleteUser(const QString& username)
+{
+    QTextStream out(stdout);
+    QTextStream in(stdin);
+
+    UserId userId = _storage->getUserId(username);
+    if (!userId.isValid()) {
+        out << "User " << username << " does not exist." << endl;
+        return false;
+    }
+
+    out << "This will permanently delete user " << username << " and all of their data";
+    if (_sessions.contains(userId)) {
+        out << " and disconnect their active session";
+    }
+    out << "." << endl;
+    out << "Are you sure? [y/N] ";
+    out.flush();
+
+    QString answer = in.readLine().trimmed().toLower();
+    if (answer != "y" && answer != "yes") {
+        out << "Aborted." << endl;
+        return false;
+    }
+
+    // Make sure pending data of the user's active session gets saved to the
+    // database before it is shut down
+    syncStorage();
+
+    // Shut down the user's session, if any, so that any live IRC connections
+    // are disconnected and connected clients are dropped
+    if (_sessions.contains(userId)) {
+        qInfo() << "Shutting down active session of user" << username;
+        _sessions.take(userId)->deleteLater();
+    }
+
+    // Remove the user and all of their data from the database
+    _storage->delUser(userId);
+
+    // Make sure the user is not restored as an active session on next core start
+    saveState();
+
+    // Refresh the sysident cache
+    cacheSysIdent();
+
+    out << "User " << username << " has been deleted." << endl;
+    return true;
+}
+
+bool Core::listUsers()
+{
+    QTextStream out(stdout);
+
+    const QMap<UserId, QString> users = _storage->userList();
+    if (users.isEmpty()) {
+        out << "No users found." << endl;
+        return true;
+    }
+
+    for (auto it = users.constBegin(); it != users.constEnd(); ++it) {
+        out << it.key() << "\t" << it.value() << endl;
+    }
+    return true;
 }
 
 bool Core::changeUserPassword(UserId userId, const QString& password)

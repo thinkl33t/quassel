@@ -165,6 +165,11 @@ public:
      */
     virtual void delUser(UserId user) = 0;
 
+    //! Get a list of all known user IDs and their login names
+    /** \return A map of UserId to username
+     */
+    virtual QMap<UserId, QString> userList() = 0;
+
     //! Store a user setting persistently
     /**
      * \param userId       The users Id

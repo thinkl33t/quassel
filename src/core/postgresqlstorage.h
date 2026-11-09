@@ -53,6 +53,7 @@ public:
     QString getUserAuthenticator(const UserId userid) override;
     UserId internalUser() override;
     void delUser(UserId user) override;
+    QMap<UserId, QString> userList() override;
     void setUserSetting(UserId userId, const QString& settingName, const QVariant& data) override;
     QVariant getUserSetting(UserId userId, const QString& settingName, const QVariant& defaultData = QVariant()) override;
     void setCoreState(const QVariantList& data) override;

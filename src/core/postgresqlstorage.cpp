@@ -392,6 +392,22 @@ void PostgreSqlStorage::delUser(UserId user)
     }
 }
 
+QMap<UserId, QString> PostgreSqlStorage::userList()
+{
+    QMap<UserId, QString> users;
+
+    QSqlQuery query(logDb());
+    query.prepare(queryString("select_all_authusernames"));
+    safeExec(query);
+    watchQuery(query);
+
+    while (query.next()) {
+        users.insert(UserId{query.value(0).toInt()}, query.value(1).toString());
+    }
+
+    return users;
+}
+
 void PostgreSqlStorage::setUserSetting(UserId userId, const QString& settingName, const QVariant& data)
 {
     QByteArray rawData;

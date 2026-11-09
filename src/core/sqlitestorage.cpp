@@ -369,6 +369,26 @@ void SqliteStorage::delUser(UserId user)
     emit userRemoved(user);
 }
 
+QMap<UserId, QString> SqliteStorage::userList()
+{
+    QMap<UserId, QString> users;
+
+    {
+        QSqlQuery query(logDb());
+        query.prepare(queryString("select_all_authusernames"));
+
+        lockForRead();
+        safeExec(query);
+
+        while (query.next()) {
+            users.insert(UserId{query.value(0).toInt()}, query.value(1).toString());
+        }
+    }
+    unlock();
+
+    return users;
+}
+
 void SqliteStorage::setUserSetting(UserId userId, const QString& settingName, const QVariant& data)
 {
     QByteArray rawData;

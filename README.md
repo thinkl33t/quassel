@@ -35,6 +35,8 @@ user for the core-side storage.
 Once you've set up Quassel, you may:
 * Add more users: `quasselcore --add-user`
 * Change the password of an existing user: `quasselcore --change-userpass=username`
+* Delete a user (disconnecting any active session): `quasselcore --delete-user=username`
+* List all users: `quasselcore --list-users`
 * See all available options: `quasselcore --help`
 
 On some systems, you may need to specify `--configdir`, e.g.
