@@ -1059,11 +1059,19 @@ void Core::JsonResult::print() const
 }
 
 // Read a single line from stdin without prompting. Used by the --json mode so
-// that credentials can be piped in (e.g. `echo -e "user\npass" | quasselcore --add-user --json`).
+// that credentials can be piped in (e.g. `printf 'user\npass\n' | quasselcore --add-user --json`).
+//
+// A single QTextStream is reused for all reads: constructing a fresh QTextStream(stdin)
+// on each call would re-buffer the entire stream and the second read would see no data.
+static QTextStream& stdinStream()
+{
+    static QTextStream in(stdin);
+    return in;
+}
+
 static QString readStdinLine()
 {
-    QTextStream in(stdin);
-    return in.readLine();
+    return stdinStream().readLine();
 }
 
 bool Core::createUser()
